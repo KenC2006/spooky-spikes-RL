@@ -552,7 +552,7 @@ def watch_trained_ai():
         visual_tf_env = tf_py_environment.TFPyEnvironment(visual_env)
         
         if not visual_env.pygame_initialized:
-            print("ERROR: shit failed")
+            print("ERROR: failed")
             return False
         
         time_step = visual_tf_env.reset()
@@ -590,7 +590,7 @@ def compare_random_vs_trained():
         visual_tf_env = tf_py_environment.TFPyEnvironment(visual_env)
         
         if not visual_env.pygame_initialized:
-            print("ERROR: shit failed")
+            print("ERROR: failed")
             return False
             
         random_policy = random_tf_policy.RandomTFPolicy(
@@ -633,7 +633,7 @@ def test_visual_environment():
         visual_tf_env = tf_py_environment.TFPyEnvironment(visual_env)
         
         if not visual_env.pygame_initialized:
-            print("ERROR: shit failed")
+            print("ERROR: failed")
             return False
         
         time_step = visual_tf_env.reset()
