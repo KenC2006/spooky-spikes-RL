@@ -11,7 +11,6 @@ from typing import Optional, Any, Dict
 
 
 class PlatformerPyEnvironment(py_environment.PyEnvironment):
-    # Environment for a 3D platformer where agent must jump over or duck under beams
     def __init__(self, max_steps: int = 10000, render_mode: str = 'none'):
         super().__init__()
         
@@ -39,7 +38,7 @@ class PlatformerPyEnvironment(py_environment.PyEnvironment):
         self.min_spawn_interval = 30
         self.spawn_acceleration_rate = 0.02
         self.MAX_SPAWN_ACCELERATION = 0.4
-        self.INITIAL_BAR_SPEED = 0.35
+        self.INITIAL_BAR_SPEED = 0.3
         self.MAX_BAR_SPEED = 0.6
         self.bar_speed_increase = 0.00005
         
@@ -116,7 +115,7 @@ class PlatformerPyEnvironment(py_environment.PyEnvironment):
             self.ducking = True
             self.jumping = False
             self.velocity_y = min(0, self.velocity_y)
-        elif action == 0:  # Return to normal stance
+        elif action == 0:  # Idle
             self.ducking = False
             if self.player_y <= self.START_Y + 0.1:
                 self.jumping = False
@@ -186,115 +185,101 @@ class PlatformerPyEnvironment(py_environment.PyEnvironment):
     
     def _calculate_reward(self, collision: bool):
         reward = 0.0
-        
+
+        # Reward penalties for hitting the beam
         if collision:
-            # Duck and jump rewards
             reward = -800.0
+
             if any(b["height"] == 3.0 and abs(b["x"] - self.player_x) < self.CUBE_WIDTH * 2 for b in self.beams):
                 if not self.ducking or self._last_action != 2:
-                    reward -= 500.0 
-            
+                    reward -= 500.0
+
             if any(b["height"] == 1.5 and abs(b["x"] - self.player_x) < self.CUBE_WIDTH * 2 for b in self.beams):
                 if not self.jumping:
-                    reward -= 500.0 
+                    reward -= 500.0
                 elif self.ducking:
-                    reward -= 200.0  
-            
+                    reward -= 200.0
+
             return reward
-        
-        # Survival rewards
+
+        # General survival penalties
         reward = 10.0
         reward += min(20.0, self.survival_time * 0.02)
-        reward += max(0, (self.current_bar_speed - self.INITIAL_BAR_SPEED) * 30.0)
-        
+        speed_bonus = (self.current_bar_speed - self.INITIAL_BAR_SPEED) * 30.0
+        reward += max(0, speed_bonus)
+
         player_left = self.player_x - self.CUBE_WIDTH / 2
         player_right = self.player_x + self.CUBE_WIDTH / 2
         current_height = self.CUBE_HEIGHT_DUCK if self.ducking else self.CUBE_HEIGHT_NORMAL
-        
+
+        # Ai keeps unducking to early on the high beams so rewards for longer duck
         for beam in self.beams:
             beam_left = beam["x"] - beam["width"] / 2
             beam_right = beam["x"] + beam["width"] / 2
-            
+
+            extended_width = self.CUBE_WIDTH * 2.5
+            approach_zone = beam_left - extended_width > player_right
+            passing_zone = (beam_left - extended_width <= player_right and 
+                            beam_right + extended_width >= player_left)
+            past_zone = beam_right + extended_width * 0.6 < player_left
+
             distance = beam["x"] - self.player_x
             distance_scale = math.exp(-abs(distance) / 3.5)
-            
-            EXTENDED_WIDTH = self.CUBE_WIDTH * 2  # Stupid ai cant duck for long enough
-            
-            # Width compensation to make ai duck more
-            passing_zone = beam_left - EXTENDED_WIDTH <= player_right and beam_right + EXTENDED_WIDTH >= player_left
-            pre_passing_zone = beam_left - EXTENDED_WIDTH * 1.5 <= player_right and not passing_zone  
-            post_passing_zone = beam_right + EXTENDED_WIDTH * 0.5 >= player_left and not passing_zone  
-            approach_zone = distance > 0 and distance < 6.0
-            critical_zone = distance > 0 and distance < 4.0 
-            
-            if beam["height"] == 3.0:  
+
+            if beam["height"] == 3.0:
                 if passing_zone:
                     if self.ducking and self._last_action == 2:
-                        reward += 250.0 * distance_scale
-                        position_bonus = 120.0 * (1.0 - min(1.0, abs(distance) / (beam["width"] + EXTENDED_WIDTH)))
-                        reward += position_bonus
-
-                    else:
-                        reward -= 300.0 * distance_scale
-
-                elif pre_passing_zone:
-                    if self.ducking and self._last_action == 2:
-                        reward += 150.0 * distance_scale
-                    else:
-                        reward -= 200.0 * distance_scale
-
-                elif post_passing_zone:
-                    if self.ducking and self._last_action == 2:
-                        reward += 100.0 * distance_scale
+                        duck_maintain_reward = 220.0 * distance_scale
+                        position_bonus = 100.0 * (1.0 - min(1.0, abs(distance) / (beam["width"] + extended_width)))
+                        reward += duck_maintain_reward + position_bonus
                     else:
                         reward -= 250.0 * distance_scale
 
-                elif approach_zone:
+                elif approach_zone and distance < 6.0:
                     if self.ducking and self._last_action == 2:
                         prep_scale = 1.0 - min(1.0, (distance - 3.0) / 3.0)
                         reward += 100.0 * prep_scale
-                    elif critical_zone:
+                    elif distance < 4.0:
                         reward -= 120.0 * distance_scale
 
-            else: 
-                if passing_zone:
+                elif past_zone and abs(distance) < extended_width * 1.2:
+                    if self.ducking and self._last_action == 2:
+                        reward += 150.0
+                    else:
+                        reward -= 200.0
 
+            else:
+                if passing_zone:
                     if self.jumping:
                         jump_reward = 150.0 * distance_scale
                         if self.velocity_y > 0:
                             jump_reward += 50.0 * distance_scale
                         reward += jump_reward
-
                     elif self.ducking:
-                        reward -= 200.0 * distance_scale 
-
+                        reward -= 200.0 * distance_scale
                     else:
-                        reward -= 100.0 * distance_scale 
+                        reward -= 100.0 * distance_scale
 
-                elif approach_zone:
-
+                elif approach_zone and distance < 4.0:
                     if self.jumping:
                         jump_prep_reward = 60.0 * distance_scale
                         if self.velocity_y > 0:
                             jump_prep_reward += 40.0 * distance_scale
                         reward += jump_prep_reward
-
                     elif self.ducking:
-                        reward -= 150.0 * distance_scale 
+                        reward -= 150.0 * distance_scale
+                    elif distance < 2.5:
+                        reward -= 50.0 * distance_scale
 
-                    elif critical_zone:
-                        reward -= 50.0 * distance_scale  
-        
-        # Rewards for not doing random stuff when no beams are close
         nearby_beams = any(abs(b["x"] - self.player_x) < max(6.0, self.CUBE_WIDTH * 4) for b in self.beams)
         if not nearby_beams:
             if self.ducking:
-                reward -= 20.0  
+                reward -= 20.0
             if self.jumping:
-                reward -= 15.0  
+                reward -= 15.0
             if not self.ducking and not self.jumping and self.player_y <= self.START_Y + 0.1:
-                reward += 10.0  
-        
+                reward += 10.0
+
         return reward
 
     def _get_observation(self):

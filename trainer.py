@@ -12,7 +12,6 @@ from tf_agents.trajectories import trajectory
 from tf_agents.utils import common
 from tf_agents.environments import tf_py_environment
 
-# Import the environment
 from platformer_env import PlatformerPyEnvironment, create_platformer_env
 
 class VisualPlatformerEnv(PlatformerPyEnvironment):
@@ -36,20 +35,26 @@ class VisualPlatformerEnv(PlatformerPyEnvironment):
             self.screen = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
             pygame.display.set_caption("Spooky Spikes RL")
             self.clock = pygame.time.Clock()
+            self.target_fps = 40
+            self.frame_skip = 0 
             self.font = pygame.font.Font(None, 24)
             self.big_font = pygame.font.Font(None, 36)
             self.pygame_initialized = True
             
-            # Colors
+            # Color scheme was AI'd
             self.RED = (255, 0, 0)
-            self.SKY_COLOR = (180, 220, 255)
-            self.PLATFORM_COLOR = (100, 100, 100)
-            self.SIDE_COLOR = (200, 50, 50)
-            self.TOP_COLOR = (255, 70, 70)
-            self.BEAM_COLOR_LOW = (200, 200, 200)
-            self.BEAM_COLOR_HIGH = (255, 140, 0)
-            self.TEXT_COLOR = (255, 255, 255)
-            self.AI_COLOR = (0, 255, 0)
+            self.SKY_COLOR = (25, 25, 35) 
+            self.PLATFORM_COLOR = (45, 45, 55)  
+            self.PLATFORM_GRID_COLOR = (55, 55, 65)  
+            self.SIDE_COLOR = (220, 50, 50) 
+            self.TOP_COLOR = (255, 70, 70)  
+            self.BEAM_COLOR_LOW = (140, 200, 255)  
+            self.BEAM_COLOR_HIGH = (255, 165, 0)  
+            self.BEAM_EDGE_LOW = (160, 220, 255)  
+            self.BEAM_EDGE_HIGH = (255, 185, 20) 
+            self.TEXT_COLOR = (200, 200, 220)  
+            self.AI_COLOR = (0, 255, 170) 
+            self.GRID_SIZE = 1.0 
             
             # Camera settings for the projections
             self.CAMERA_HEIGHT = 10
@@ -110,9 +115,18 @@ class VisualPlatformerEnv(PlatformerPyEnvironment):
                 pygame.draw.polygon(self.screen, color, points)
             except:
                 pass
+
+        for x in np.arange(-hx, hx + self.GRID_SIZE, self.GRID_SIZE):
+            start = self.project_3d(x, py + 0.01, -hz) 
+            end = self.project_3d(x, py + 0.01, hz)
+            pygame.draw.line(self.screen, self.PLATFORM_GRID_COLOR, start, end, 1)
+            
+        for z in np.arange(-hz, hz + self.GRID_SIZE, self.GRID_SIZE):
+            start = self.project_3d(-hx, py + 0.01, z)
+            end = self.project_3d(hx, py + 0.01, z)
+            pygame.draw.line(self.screen, self.PLATFORM_GRID_COLOR, start, end, 1)
     
     def draw_cube(self, x, y, z, width, depth, height):
-        """Draw the player cube"""
         if not self.pygame_initialized:
             return
             
@@ -152,7 +166,6 @@ class VisualPlatformerEnv(PlatformerPyEnvironment):
                 pass
     
     def draw_beam(self, beam):
-        """Draw a beam obstacle"""
         if not self.pygame_initialized:
             return
             
@@ -181,6 +194,7 @@ class VisualPlatformerEnv(PlatformerPyEnvironment):
         p = {k: self.project_3d(*v) for k, v in corners.items()}
         
         beam_color = self.BEAM_COLOR_LOW if bh == 1.5 else self.BEAM_COLOR_HIGH
+        edge_color = self.BEAM_EDGE_LOW if bh == 1.5 else self.BEAM_EDGE_HIGH
         
         faces = [
             (["blb", "brb", "brt", "blt"], beam_color),
@@ -198,27 +212,33 @@ class VisualPlatformerEnv(PlatformerPyEnvironment):
             try:
                 points = [p[k] for k in keys]
                 pygame.draw.polygon(self.screen, color, points)
+                pygame.draw.polygon(self.screen, edge_color, points, 2)
             except:
                 pass
     
     def draw_ui(self):
-        """Draw AI status information"""
         if not self.pygame_initialized or not self.show_ai_info:
             return
         
-        # AI status panel
         panel_x = self.WIDTH - 300
         panel_y = 10
         panel_width = 280
         panel_height = 200
         
-        # Draw panel background
-        pygame.draw.rect(self.screen, (0, 0, 0, 128), 
-                        (panel_x, panel_y, panel_width, panel_height))
+        gradient_surface = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+        for i in range(panel_height):
+            alpha = int(128 * (1 - i/panel_height)) 
+            pygame.draw.line(gradient_surface, (0, 0, 0, alpha), 
+                           (0, i), (panel_width, i))
+        self.screen.blit(gradient_surface, (panel_x, panel_y))
+        
+        border_glow = pygame.Surface((panel_width + 4, panel_height + 4), pygame.SRCALPHA)
+        pygame.draw.rect(border_glow, (*self.AI_COLOR, 64), 
+                        (0, 0, panel_width + 4, panel_height + 4), 4)
+        self.screen.blit(border_glow, (panel_x - 2, panel_y - 2))
         pygame.draw.rect(self.screen, self.AI_COLOR, 
                         (panel_x, panel_y, panel_width, panel_height), 2)
         
-        # Title
         title = self.big_font.render("AI STATUS", True, self.AI_COLOR)
         self.screen.blit(title, (panel_x + 10, panel_y + 10))
         
@@ -231,7 +251,6 @@ class VisualPlatformerEnv(PlatformerPyEnvironment):
         self.screen.blit(action_surface, (panel_x + 10, y_offset))
         y_offset += 25
         
-        # Q-values
         self.screen.blit(self.font.render("Q-Values:", True, self.TEXT_COLOR), 
                         (panel_x + 10, y_offset))
         y_offset += 20
@@ -241,25 +260,33 @@ class VisualPlatformerEnv(PlatformerPyEnvironment):
             q_text = f"  {action}: {q_val:.3f}"
             q_surface = self.font.render(q_text, True, color)
             self.screen.blit(q_surface, (panel_x + 10, y_offset))
+            
+            bar_width = int(max(0, min(100, q_val * 50))) 
+            if bar_width > 0:
+                pygame.draw.rect(self.screen, color, 
+                               (panel_x + 150, y_offset + 5, bar_width, 5))
             y_offset += 18
         
-        # Confidence is lokey bogus and doesnt work correctly
+        # Confidence number is lokey bogus and means nothing
         conf_text = f"Confidence: {self.confidence*100:.1f}%"
         conf_surface = self.font.render(conf_text, True, self.TEXT_COLOR)
         self.screen.blit(conf_surface, (panel_x + 10, y_offset))
         
-        # Game stats
         stats_y = self.HEIGHT - 100
         stats = [
             f"Survival Time: {self.survival_time}",
-            f"Current Speed: {self.current_bar_speed:.3f}",
-            f"Beams on Screen: {len(self.beams)}",
-            f"Player Y: {self.player_y:.2f}"
+            f"Speed: {self.current_bar_speed:.3f}",
+            f"Beams: {len(self.beams)}",
+            f"Height: {self.player_y:.2f}"
         ]
         
         for i, stat in enumerate(stats):
-            stat_surface = self.font.render(stat, True, self.TEXT_COLOR)
-            self.screen.blit(stat_surface, (10, stats_y + i * 22))
+            stat_surface = pygame.Surface((200, 20), pygame.SRCALPHA)
+            pygame.draw.rect(stat_surface, (0, 0, 0, 100), (0, 0, 200, 20))
+            self.screen.blit(stat_surface, (5, stats_y + i * 22 - 2))
+            
+            text_surface = self.font.render(stat, True, self.TEXT_COLOR)
+            self.screen.blit(text_surface, (10, stats_y + i * 22))
     
     def handle_events(self):
         """Handle pygame events"""
@@ -283,6 +310,11 @@ class VisualPlatformerEnv(PlatformerPyEnvironment):
         
         if not self.handle_events():
             return False
+
+        # Skipping frames so it runs a bit smoother
+        self.frame_skip = (self.frame_skip + 1) % 2
+        if self.frame_skip != 0:
+            return True
         
         try:
             self.screen.fill(self.SKY_COLOR)
@@ -299,7 +331,7 @@ class VisualPlatformerEnv(PlatformerPyEnvironment):
             self.draw_ui()
             
             pygame.display.flip()
-            self.clock.tick(30)
+            self.clock.tick(self.target_fps)  
             
         except Exception as e:
             print(f"Render error: {e}")
@@ -354,9 +386,9 @@ class SimpleTrainer:
             activation_fn=tf.keras.activations.elu
         )
 
-        initial_learning_rate = 2e-4
+
         self.optimizer = tf.keras.optimizers.Adam(
-            learning_rate=initial_learning_rate,
+            learning_rate=2e-4,
             clipnorm=0.5,
             epsilon=1e-5
         )
@@ -364,7 +396,7 @@ class SimpleTrainer:
         self.train_step_counter = tf.Variable(0)
         
         self.initial_epsilon = 1.0
-        self.min_epsilon = 0.4
+        self.min_epsilon = 0.1
         self.total_decay_steps = 20000
         
         preprocessing_layers_target = tf.keras.Sequential([
@@ -512,38 +544,41 @@ def watch_trained_ai():
     print("Training AI agent...")
     
     try:
-        # Train the agent
         trainer = SimpleTrainer()
         trained_agent = trainer.train_basic_agent()
         
-        # Show it playing
         print("Trained AI now running")
         visual_env = VisualPlatformerEnv(max_steps=5000, render_mode='human')
         visual_tf_env = tf_py_environment.TFPyEnvironment(visual_env)
         
+        if not visual_env.pygame_initialized:
+            print("ERROR: shit failed")
+            return False
+        
         time_step = visual_tf_env.reset()
         episode_return = 0
-        step_count = 0
         
-        while True:
+        while not visual_env.should_quit:
             q_values = trainer.q_net(time_step.observation)[0].numpy()[0]
             action_step = trained_agent.policy.action(time_step)
             
-            # Update display
             visual_env.update_ai_info(action_step.action.numpy()[0], q_values)
-            
             time_step = visual_tf_env.step(action_step.action)
             episode_return += time_step.reward.numpy()[0]
-            step_count += 1
             
-
+            if time_step.is_last():
+                time_step = visual_tf_env.reset()
+            
             if not visual_env.render_frame():
                 break
         
+        visual_env.close()
         print(f"Episode score: {episode_return:.1f}")
+        return True
         
     except Exception as e:
         print(f"Error in demo: {e}")
+        return False
 
 
 def compare_random_vs_trained():
@@ -553,34 +588,41 @@ def compare_random_vs_trained():
         print("Showing RANDOM AI")
         visual_env = VisualPlatformerEnv(max_steps=1000, render_mode='human')
         visual_tf_env = tf_py_environment.TFPyEnvironment(visual_env)
+        
+        if not visual_env.pygame_initialized:
+            print("ERROR: shit failed")
+            return False
+            
         random_policy = random_tf_policy.RandomTFPolicy(
             visual_tf_env.time_step_spec(), visual_tf_env.action_spec()
         )
         
         time_step = visual_tf_env.reset()
-        step_count = 0
         random_score = 0
         
-        while not time_step.is_last() and not visual_env.should_quit:
+        while not visual_env.should_quit:
             action_step = random_policy.action(time_step)
             visual_env.update_ai_info(action_step.action.numpy()[0])
             time_step = visual_tf_env.step(action_step.action)
             random_score += time_step.reward.numpy()[0]
-            step_count += 1
             
-            if step_count % 2 == 0:
-                if not visual_env.render_frame():
-                    break
+            if time_step.is_last():
+                time_step = visual_tf_env.reset()
+            
+            if not visual_env.render_frame():
+                break
         
         visual_env.close()
         print(f"Random AI score: {random_score:.1f}")
         
         if not visual_env.should_quit:
             input("Press Enter to see the TRAINED AI...")
-            watch_trained_ai()
+            return watch_trained_ai()
+        return True
     
     except Exception as e:
         print(f"Error in comparison: {e}")
+        return False
 
 
 def test_visual_environment():
@@ -594,24 +636,18 @@ def test_visual_environment():
             print("ERROR: shit failed")
             return False
         
-        print("Success")
-        print("Close window or press ESC to exit")
-        
         time_step = visual_tf_env.reset()
-        step_count = 0
         
-        while step_count < 1000 and not visual_env.should_quit:
+        while not visual_env.should_quit:
             action = tf.random.uniform([], 0, 3, dtype=tf.int32)
             visual_env.update_ai_info(action.numpy())
             time_step = visual_tf_env.step(action)
-            step_count += 1
-            
-            if step_count % 2 == 0:
-                if not visual_env.render_frame():
-                    break
             
             if time_step.is_last():
                 time_step = visual_tf_env.reset()
+            
+            if not visual_env.render_frame():
+                break
         
         visual_env.close()
         print("Visual test completed")
