@@ -16,7 +16,6 @@ from tf_agents.environments import tf_py_environment
 from platformer_env import PlatformerPyEnvironment, create_platformer_env
 
 class VisualPlatformerEnv(PlatformerPyEnvironment):
-    """Enhanced environment with pygame visualization"""
     
     def __init__(self, max_steps=10000, render_mode='human', show_ai_info=True):
         super().__init__(max_steps, render_mode)
@@ -31,12 +30,11 @@ class VisualPlatformerEnv(PlatformerPyEnvironment):
             self.init_pygame()
     
     def init_pygame(self):
-        """Initialize pygame for visualization"""
         try:
             pygame.init()
             self.WIDTH, self.HEIGHT = 1000, 700
             self.screen = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
-            pygame.display.set_caption("AI Learning 3D Platformer")
+            pygame.display.set_caption("Spooky Spikes RL")
             self.clock = pygame.time.Clock()
             self.font = pygame.font.Font(None, 24)
             self.big_font = pygame.font.Font(None, 36)
@@ -53,17 +51,16 @@ class VisualPlatformerEnv(PlatformerPyEnvironment):
             self.TEXT_COLOR = (255, 255, 255)
             self.AI_COLOR = (0, 255, 0)
             
-            # Camera settings for 3D projection
+            # Camera settings for the projections
             self.CAMERA_HEIGHT = 10
             self.CAMERA_DISTANCE = 28
             self.FOV = math.radians(60)
             
         except Exception as e:
-            print(f"Failed to initialize pygame: {e}")
+            print(f"Failed to initialize: {e}")
             self.pygame_initialized = False
     
     def project_3d(self, x, y, z):
-        """Project 3D coordinates to 2D screen coordinates"""
         rel_z = z + self.CAMERA_DISTANCE
         if rel_z <= 0.01:
             rel_z = 0.01
@@ -74,7 +71,6 @@ class VisualPlatformerEnv(PlatformerPyEnvironment):
         return sx, sy
     
     def draw_platform(self):
-        """Draw the 3D platform"""
         if not self.pygame_initialized:
             return
             
@@ -210,7 +206,7 @@ class VisualPlatformerEnv(PlatformerPyEnvironment):
         if not self.pygame_initialized or not self.show_ai_info:
             return
         
-        # AI Status Panel
+        # AI status panel
         panel_x = self.WIDTH - 300
         panel_y = 10
         panel_width = 280
@@ -247,7 +243,7 @@ class VisualPlatformerEnv(PlatformerPyEnvironment):
             self.screen.blit(q_surface, (panel_x + 10, y_offset))
             y_offset += 18
         
-        # Confidence
+        # Confidence is lokey bogus and doesnt work correctly
         conf_text = f"Confidence: {self.confidence*100:.1f}%"
         conf_surface = self.font.render(conf_text, True, self.TEXT_COLOR)
         self.screen.blit(conf_surface, (panel_x + 10, y_offset))
@@ -289,25 +285,19 @@ class VisualPlatformerEnv(PlatformerPyEnvironment):
             return False
         
         try:
-            # Clear screen
             self.screen.fill(self.SKY_COLOR)
             
-            # Draw 3D scene
             self.draw_platform()
             
-            # Draw player cube
             current_height = self.CUBE_HEIGHT_DUCK if self.ducking else self.CUBE_HEIGHT_NORMAL
             self.draw_cube(self.player_x, self.player_y, self.player_z, 
                           self.CUBE_WIDTH, self.CUBE_DEPTH, current_height)
             
-            # Draw beams
             for beam in self.beams:
                 self.draw_beam(beam)
             
-            # Draw UI
             self.draw_ui()
             
-            # Update display
             pygame.display.flip()
             self.clock.tick(30)
             
@@ -323,9 +313,8 @@ class VisualPlatformerEnv(PlatformerPyEnvironment):
         if q_values is not None:
             self.last_q_values = q_values.tolist()
             
-            # FIXED: Proper confidence calculation using softmax
             probabilities = tf.nn.softmax(q_values).numpy()
-            self.confidence = float(np.max(probabilities))  # Now 0-1 range
+            self.confidence = float(np.max(probabilities))  # fixed range to 0-1 
     
     def close(self):
         """Clean up pygame resources"""
@@ -335,17 +324,15 @@ class VisualPlatformerEnv(PlatformerPyEnvironment):
 
 
 class SimpleTrainer:
-    """Improved trainer for creating a more stable AI agent"""
-    
+    # Neural network params and training settings
     def __init__(self):
         self.train_env = create_platformer_env(max_steps=3000)
-        self.batch_size = 512  # Even larger batch for better gradient estimates
+        self.batch_size = 512
         
-        # Create preprocessing layers with stronger regularization
         preprocessing_layers = tf.keras.Sequential([
             tf.keras.layers.Dense(
                 512, activation='elu',
-                kernel_regularizer=tf.keras.regularizers.l2(0.005),  # Reduced regularization
+                kernel_regularizer=tf.keras.regularizers.l2(0.005),
                 name='hidden_1'
             ),
             tf.keras.layers.Dense(
@@ -360,7 +347,6 @@ class SimpleTrainer:
             )
         ])
         
-        # Network with preprocessing layers
         self.q_net = q_network.QNetwork(
             self.train_env.observation_spec(),
             self.train_env.action_spec(),
@@ -368,22 +354,19 @@ class SimpleTrainer:
             activation_fn=tf.keras.activations.elu
         )
 
-        # Faster initial learning rate with cyclical decay
-        initial_learning_rate = 2e-4  # Higher initial learning rate
+        initial_learning_rate = 2e-4
         self.optimizer = tf.keras.optimizers.Adam(
             learning_rate=initial_learning_rate,
-            clipnorm=0.5,  # Less aggressive clipping
+            clipnorm=0.5,
             epsilon=1e-5
         )
         
         self.train_step_counter = tf.Variable(0)
         
-        # Faster epsilon decay
         self.initial_epsilon = 1.0
-        self.min_epsilon = 0.05  # Lower minimum for more exploitation
-        self.total_decay_steps = 20000  # Faster decay
+        self.min_epsilon = 0.4
+        self.total_decay_steps = 20000
         
-        # Create target network
         preprocessing_layers_target = tf.keras.Sequential([
             tf.keras.layers.Dense(
                 512, activation='elu',
@@ -417,11 +400,11 @@ class SimpleTrainer:
             target_q_network=self.target_q_net,
             td_errors_loss_fn=common.element_wise_huber_loss,
             train_step_counter=self.train_step_counter,
-            target_update_period=50,  # More frequent target updates
-            target_update_tau=0.01,  # Faster target updates
+            target_update_period=50,
+            target_update_tau=0.01,
             epsilon_greedy=self.initial_epsilon,
-            gamma=0.99,  # Higher discount for better long-term planning
-            reward_scale_factor=0.1,  # Scale rewards less
+            gamma=0.99,
+            reward_scale_factor=0.1,
             gradient_clipping=True,
             debug_summaries=True,
             summarize_grads_and_vars=True
@@ -429,11 +412,10 @@ class SimpleTrainer:
         
         self.agent.initialize()
         
-        # Replay buffer with prioritized sampling
         self.replay_buffer = tf_uniform_replay_buffer.TFUniformReplayBuffer(
             data_spec=self.agent.collect_data_spec,
             batch_size=self.train_env.batch_size,
-            max_length=100000  # Smaller buffer for more recent experiences
+            max_length=100000
         )
         
         self.random_policy = random_tf_policy.RandomTFPolicy(
@@ -442,7 +424,6 @@ class SimpleTrainer:
         )
     
     def collect_step(self, environment, policy, epsilon=None):
-        """Collect a single step of experience with optional epsilon override"""
         if epsilon is not None:
             original_epsilon = self.agent._epsilon_greedy
             self.agent._epsilon_greedy = epsilon
@@ -457,22 +438,16 @@ class SimpleTrainer:
             self.agent._epsilon_greedy = original_epsilon
     
     def update_epsilon(self, training_step):
-        """Update epsilon using linear decay to 0.1"""
-        # Ensure we don't exceed total decay steps
         step = min(training_step, self.total_decay_steps)
-        
-        # Linear decay from 1.0 to 0.1
         progress = step / self.total_decay_steps
-        new_epsilon = 1.0 - (0.9 * progress)  # Will go from 1.0 to 0.1 linearly
-        
+        new_epsilon = self.initial_epsilon - ((self.initial_epsilon - self.min_epsilon) * progress)
         self.agent._epsilon_greedy = new_epsilon
         return new_epsilon
     
     def evaluate_agent(self, num_episodes=20):
-        """Evaluate agent performance with epsilon=0 (no exploration)"""
         total_return = 0.0
         original_epsilon = self.agent._epsilon_greedy
-        self.agent._epsilon_greedy = 0.0  # No exploration during evaluation
+        self.agent._epsilon_greedy = 0.0
         
         try:
             for _ in range(num_episodes):
@@ -484,25 +459,24 @@ class SimpleTrainer:
                     episode_return += float(time_step.reward)
                 total_return += episode_return
         finally:
-            self.agent._epsilon_greedy = original_epsilon  # Restore original epsilon
+            self.agent._epsilon_greedy = original_epsilon
         
         avg_return = total_return / num_episodes
         return avg_return
     
     def train_basic_agent(self):
-        print("Training AI agent with improved parameters...")
+        print("Training AI")
         
         env = self.train_env
         env.reset()
         
-        # Collect more initial experience with full exploration
-        print("Phase 1: Collecting random experience...")
-        for i in range(100000):  # Reduced from 100000 to 50000
+        print("Phase 1: Collecting random experience")
+        for i in range(100000):
             self.collect_step(env, self.agent.collect_policy, epsilon=1.0)
             if i % 1000 == 0:
                 print(f"Random experience: {i}/100000")
         
-        print("Phase 2: Training neural network...")
+        print("Phase 2: Training neural network")
         dataset = self.replay_buffer.as_dataset(
             num_parallel_calls=3,
             sample_batch_size=self.batch_size,
@@ -511,74 +485,17 @@ class SimpleTrainer:
         
         iterator = iter(dataset)
         
-        best_loss = float('inf')
-        best_return = float('-inf')
-        patience = 20
-        patience_counter = 0
-        moving_avg_loss = []
-        moving_avg_return = []
-        
-        # Training with more frequent evaluation
         for i in range(20000):
             try:
                 experience, _ = next(iterator)
                 train_step = self.agent.train(experience)
                 loss = float(train_step.loss.numpy())
-                
-                # Update epsilon
                 current_epsilon = self.update_epsilon(i)
                 
-                # Track moving average of loss
-                moving_avg_loss.append(loss)
-                if len(moving_avg_loss) > 100:
-                    moving_avg_loss.pop(0)
-                avg_loss = sum(moving_avg_loss) / len(moving_avg_loss)
-                
-                if i % 500 == 0:  # Evaluate twice as often
-                    # Evaluate agent with more episodes
+                if i % 500 == 0:
                     avg_return = float(self.evaluate_agent(num_episodes=20))
-                    
-                    # Track moving average of returns with larger window
-                    moving_avg_return.append(avg_return)
-                    if len(moving_avg_return) > 10:  # Doubled window size
-                        moving_avg_return.pop(0)
-                    smoothed_return = sum(moving_avg_return) / len(moving_avg_return)
-                    
-                    print(f"Step {i}, Loss: {avg_loss:.4f}, Epsilon: {current_epsilon:.4f}, "
-                          f"Avg Return: {smoothed_return:.2f}")
-                    
-                    # Early stopping based on smoothed performance
-                    if smoothed_return > best_return:
-                        best_return = smoothed_return
-                        patience_counter = 0
-                    else:
-                        patience_counter += 1
-                    
-                    if patience_counter >= patience:
-                        if smoothed_return > 200:
-                            print("Early stopping triggered with good performance!")
-                            break
-                        else:
-                            print("Resetting patience - continuing training...")
-                            patience_counter = 0
-                    
-                    # Adjust learning rate if needed
-                    if avg_loss > best_loss * 1.2:
-                        print("WARNING: Training unstable, reducing learning rate...")
-                        if isinstance(self.optimizer.learning_rate, tf.keras.optimizers.schedules.ExponentialDecay):
-                            current_lr = self.optimizer.learning_rate(self.train_step_counter)
-                        else:
-                            current_lr = self.optimizer.learning_rate
-                        new_lr = tf.keras.optimizers.schedules.ExponentialDecay(
-                            current_lr * 0.8,
-                            decay_steps=5000,
-                            decay_rate=0.95,
-                            staircase=True
-                        )
-                        self.optimizer.learning_rate = new_lr
-                        patience_counter = 0
-                    
-                    best_loss = min(best_loss, avg_loss)
+                    print(f"Step {i}, Loss: {loss:.4f}, Epsilon: {current_epsilon:.4f}, "
+                          f"Avg Return: {avg_return:.2f}")
                 
             except Exception as e:
                 print(f"Training error at step {i}: {str(e)}")
@@ -592,8 +509,6 @@ class SimpleTrainer:
 
 
 def watch_trained_ai():
-    """Watch a trained AI play the game"""
-    print("=== AI DEMO ===")
     print("Training AI agent...")
     
     try:
@@ -602,7 +517,7 @@ def watch_trained_ai():
         trained_agent = trainer.train_basic_agent()
         
         # Show it playing
-        print("Now watch the trained AI play!")
+        print("Trained AI now running")
         visual_env = VisualPlatformerEnv(max_steps=5000, render_mode='human')
         visual_tf_env = tf_py_environment.TFPyEnvironment(visual_env)
         
@@ -611,7 +526,6 @@ def watch_trained_ai():
         step_count = 0
         
         while True:
-            # Get Q-values for display
             q_values = trainer.q_net(time_step.observation)[0].numpy()[0]
             action_step = trained_agent.policy.action(time_step)
             
@@ -622,12 +536,10 @@ def watch_trained_ai():
             episode_return += time_step.reward.numpy()[0]
             step_count += 1
             
-            # Render every other frame for smooth performance
-            if step_count % 2 == 0:
-                if not visual_env.render_frame():
-                    break
+
+            if not visual_env.render_frame():
+                break
         
-        # visual_env.close()
         print(f"Episode score: {episode_return:.1f}")
         
     except Exception as e:
@@ -635,13 +547,10 @@ def watch_trained_ai():
 
 
 def compare_random_vs_trained():
-    """Compare random AI vs trained AI"""
-    print("=== COMPARISON MODE ===")
     print("First you'll see random AI, then trained AI")
     
     try:
-        # Show random AI first
-        print("Showing RANDOM AI (plays randomly)")
+        print("Showing RANDOM AI")
         visual_env = VisualPlatformerEnv(max_steps=1000, render_mode='human')
         visual_tf_env = tf_py_environment.TFPyEnvironment(visual_env)
         random_policy = random_tf_policy.RandomTFPolicy(
@@ -675,20 +584,17 @@ def compare_random_vs_trained():
 
 
 def test_visual_environment():
-    """Test the visual environment"""
-    print("=== TESTING VISUAL ENVIRONMENT ===")
-    print("Testing pygame and 3D rendering...")
+    print("Testing 3D rendering and game env...")
     
     try:
         visual_env = VisualPlatformerEnv(max_steps=500, render_mode='human')
         visual_tf_env = tf_py_environment.TFPyEnvironment(visual_env)
         
         if not visual_env.pygame_initialized:
-            print("ERROR: Pygame failed to initialize!")
+            print("ERROR: shit failed")
             return False
         
-        print("Pygame initialized successfully!")
-        print("You should see a 3D platformer with a red cube moving randomly")
+        print("Success")
         print("Close window or press ESC to exit")
         
         time_step = visual_tf_env.reset()
@@ -706,10 +612,9 @@ def test_visual_environment():
             
             if time_step.is_last():
                 time_step = visual_tf_env.reset()
-                print(f"Episode ended at step {step_count}, starting new episode")
         
         visual_env.close()
-        print("Visual test completed successfully!")
+        print("Visual test completed")
         return True
         
     except Exception as e:
@@ -721,7 +626,7 @@ if __name__ == "__main__":
     print("\nChoose what you want to see:")
     print("1. Watch trained AI play")
     print("2. Compare random vs trained AI")
-    print("3. Test visual environment")
+    print("3. Test runtime environment")
     
     choice = input("\nEnter choice (1/2/3): ").strip()
     
@@ -732,8 +637,8 @@ if __name__ == "__main__":
     elif choice == "3":
         success = test_visual_environment()
         if success:
-            print("\nGreat! The visual environment works. You can now try option 1.")
+            print("\nThe environment works. You can now try option 1.")
         else:
             print("\nThere's an issue with the visual environment. Check your pygame installation.")
     else:
-        print("Invalid choice!")
+        print("Invalid choice")
