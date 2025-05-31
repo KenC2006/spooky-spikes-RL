@@ -212,16 +212,16 @@ class PlatformerPyEnvironment(py_environment.PyEnvironment):
         player_right = self.player_x + self.CUBE_WIDTH / 2
         current_height = self.CUBE_HEIGHT_DUCK if self.ducking else self.CUBE_HEIGHT_NORMAL
 
-        # Ai keeps unducking to early on the high beams so rewards for longer duck
+        # Ai keeps unducking to early on the high beams so rewards for longer
         for beam in self.beams:
             beam_left = beam["x"] - beam["width"] / 2
             beam_right = beam["x"] + beam["width"] / 2
 
-            extended_width = self.CUBE_WIDTH * 2.5
+            extended_width = self.CUBE_WIDTH * 3
             approach_zone = beam_left - extended_width > player_right
             passing_zone = (beam_left - extended_width <= player_right and 
                             beam_right + extended_width >= player_left)
-            past_zone = beam_right + extended_width * 0.6 < player_left
+            past_zone = beam_right + extended_width * 1.2 < player_left
 
             distance = beam["x"] - self.player_x
             distance_scale = math.exp(-abs(distance) / 3.5)
