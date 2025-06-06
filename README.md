@@ -1,6 +1,6 @@
 # Spooky Spikes RL
 
-This project is a 3D recreation of the Spooky Spikes minigame from Pummel Party, built in pygame with a custom reinforcement learning environment. The goal is to train an AI agent to master the game and outperform human players.
+This project is a 3D recreation of the Spooky Spikes minigame from Pummel Party, built in pygame with a custom reinforcement learning environment.
 
 ## Motivation
 
@@ -48,23 +48,8 @@ After consistently getting last place in the original minigame, this project was
    - Compare random vs trained AI
    - Test the 3D environment
 
-## File Overview
-
-- `platformer_env.py` - Main environment and reward logic
-- `trainer.py` - Training loop, visualization, and agent management
-
-## Controls (for manual play, if implemented)
-
-- Jump: [Space]
-- Duck: [Down Arrow]
-- Idle: [No input]
-
 ## Notes
 
 - The AI learns to commit to ducking under high beams and not unduck too early, thanks to the reward structure.
 - The 3D effect is achieved without a 3D engine, using only math and pygame's polygon drawing.
 - The project is a fun way to explore RL, game AI, and custom rendering techniques.
-
-## License
-
-MIT
