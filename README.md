@@ -39,7 +39,7 @@ After consistently getting last place in the original minigame, this project was
    ```bash
    pip install pygame tensorflow tf-agents numpy
    ```
-2. **Run the environment or training script:**
+2. **Run the environment:**
    ```bash
    python trainer.py
    ```
@@ -52,4 +52,3 @@ After consistently getting last place in the original minigame, this project was
 
 - The AI learns to commit to ducking under high beams and not unduck too early, thanks to the reward structure.
 - The 3D effect is achieved without a 3D engine, using only math and pygame's polygon drawing.
-- The project is a fun way to explore RL, game AI, and custom rendering techniques.
