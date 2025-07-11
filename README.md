@@ -2,8 +2,6 @@
 
 This project is a 3D recreation of the Spooky Spikes minigame from Pummel Party, built in pygame with a custom reinforcement learning environment.
 
-## Motivation
-
 After consistently getting last place in the original minigame, I built a similar environment and train an AI to play optimally. The environment simulates the core mechanics of Spooky Spikes, including jumping, ducking, and dodging moving beams.
 
 ## Features
