@@ -40,7 +40,7 @@ After consistently getting last place in the original minigame, I built a simila
    python 3.10 or lower is required
    pip install pygame tensorflow tf-agents numpy
    ```
-2. **Run the environment or training script:**
+2. **Run the environment:**
    ```bash
    python trainer.py
    ```
@@ -48,3 +48,9 @@ After consistently getting last place in the original minigame, I built a simila
    - Watch trained AI play
    - Compare random vs trained AI
    - Test the 3D environment
+
+## Notes
+
+- The AI learns to commit to ducking under high beams and not unduck too early, thanks to the reward structure.
+- The 3D effect is achieved without a 3D engine, using only math and pygame's polygon drawing.
+- The project is a fun way to explore RL, game AI, and custom rendering techniques.
