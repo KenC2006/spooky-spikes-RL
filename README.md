@@ -7,11 +7,11 @@ After consistently getting last place in the original minigame, I built a simila
 ## Features
 
 - **3D Rendering in Pygame:**
-  - Custom perspective projection for a 3D look using only 2D polygons
-  - Depth sorting and visual cues for immersive gameplay
+  - Perspective projection for 3D look using only 2D polygons
+  - Depth sorting and visual cues for gameplay
 - **Reinforcement Learning Environment:**
   - Built with TensorFlow, Keras, and TF-Agents
-  - Custom reward function encourages smart timing, sustained ducking, and optimal movement
+  - Reward function that promotes smart timing, sustained ducking, and optimal movement
   - Dynamic difficulty scaling with increasing beam speed and spawn rate
 - **AI Agent:**
   - Deep Q-Network (DQN) learns to jump and duck at the right times
@@ -24,12 +24,11 @@ After consistently getting last place in the original minigame, I built a simila
 ## How It Works
 
 - The environment is defined in `platformer_env.py` as a subclass of `py_environment.PyEnvironment`.
-- 3D rendering is achieved by projecting 3D coordinates to 2D using a simple perspective formula and drawing polygons in the correct order.
+- 3D rendering is achieved by projecting 3D coordinates to 2D using a perspective formula and drawing polygons in the correct order.
 - The reward function is designed to:
   - penalize collisions
   - Reward survival, speed, and especially maintaining ducking under high beams
-  - Penalize premature unducking and random actions
-- The AI is trained using TensorFlow and Keras, leveraging TF-Agents for RL algorithms.
+  - Penalize early unducking and random actions
 
 ## Setup
 
